@@ -8,7 +8,7 @@ import (
 	"go.uber.org/atomic"
 )
 
-func TestRollingNumber(t *testing.T) {
+func TestRollingNumberConcurrent(t *testing.T) {
 	number := NewRollingNumber()
 	concurrency := 10000
 	var cntList [timeWindow]int64
@@ -23,7 +23,7 @@ func TestRollingNumber(t *testing.T) {
 			go func() {
 				// add := int64(rand.Intn(10))
 				var add int64 = 1
-				number.AddWithTime(nowUnix, add)
+				number.Add(add)
 				cnt.Add(add)
 			}()
 		}
@@ -39,7 +39,7 @@ func TestRollingNumber(t *testing.T) {
 	}
 }
 
-func BenchmarkRollingNumberIncrease(b *testing.B) {
+func BenchmarkRollingNumberAdd(b *testing.B) {
 	number := NewRollingNumber()
 	b.ResetTimer()
 	b.ReportAllocs()
@@ -48,7 +48,7 @@ func BenchmarkRollingNumberIncrease(b *testing.B) {
 	}
 }
 
-func BenchmarkRollingNumberIncreaseConcurrent(b *testing.B) {
+func BenchmarkRollingNumberAddConcurrent(b *testing.B) {
 	number := NewRollingNumber()
 	concurrency := 100000
 	b.ResetTimer()

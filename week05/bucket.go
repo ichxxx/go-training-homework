@@ -1,10 +1,15 @@
 package rolling_number
 
 import (
+	"sync"
+
 	goadder "github.com/linxGnu/go-adder"
 )
 
-type bucketArray [timeWindow]*bucket
+type bucketArray struct {
+	array [timeWindow]*bucket
+	mutex sync.RWMutex
+}
 
 // bucket 内部维护一个基于 LongAdder 实现的原子计数器，
 // 相较于普通的原子计数器，LongAdder 采用了以空间换时间的方法，
@@ -22,6 +27,10 @@ func newBucket(time int64) *bucket {
 	}
 }
 
+func newBucketArray() *bucketArray {
+	return &bucketArray{}
+}
+
 func(b *bucket) add(n int64) {
 	b.value.Add(n)
 }
@@ -30,22 +39,41 @@ func(b *bucket) sum() int64 {
 	return b.value.Sum()
 }
 
+func(b *bucket) isValid(now int64) bool {
+	if b.time >= now - timeWindow {
+		return true
+	}
+	return false
+}
+
 func(q *bucketArray) get(pos int64) (*bucket, bool) {
-	if b := q[pos % timeWindow]; b != nil {
+	q.mutex.RLock()
+	defer q.mutex.RUnlock()
+
+	if b := q.array[pos % timeWindow]; b != nil {
 		return b, true
 	}
 	return nil, false
 }
 
-func(q *bucketArray) put(pos int64, bucket *bucket) {
-	if bucket == nil {
+func(q *bucketArray) put(pos int64, newBucket *bucket) {
+	if newBucket == nil {
 		return
 	}
 
-	// 指针类型的替换是原子操作，不会发生并发冲突
-	// 但有可能会发生数据覆盖的问题
-	// 不过实际测试下来，该情况很少发生
-	// 即使发生了，数据丢失的数量也在可接受范围内
-	// 为了提高性能，这里选择不加锁
-	q[pos % timeWindow] = bucket
+	idx := pos % timeWindow
+	// 双重校验
+	if oldBucket := q.array[idx]; oldBucket == nil || oldBucket.time < newBucket.time {
+		q.mutex.Lock()
+		if oldBucket := q.array[idx]; oldBucket == nil || oldBucket.time < newBucket.time {
+			q.array[idx] = newBucket
+		}
+		q.mutex.Unlock()
+	}
+}
+
+func(q *bucketArray) forEach(fn func(b *bucket)) {
+	for _, b := range q.array {
+		fn(b)
+	}
 }

@@ -13,7 +13,7 @@ type RollingNumber struct {
 }
 
 func NewRollingNumber() *RollingNumber {
-	return &RollingNumber{buckets: &bucketArray{}}
+	return &RollingNumber{buckets: newBucketArray()}
 }
 
 func(rn *RollingNumber) getCurrentBucket() *bucket {
@@ -22,7 +22,7 @@ func(rn *RollingNumber) getCurrentBucket() *bucket {
 
 	// 当前时间和桶的时间不一致时，
 	// 说明该桶已经过期（即超过10秒）
-	// 用新桶替换掉
+	// 用新桶替换掉，使桶列表始终维持最近10秒的数据
 	if !ok || b.time != now {
 		b = newBucket(now)
 		rn.buckets.put(now, b)
@@ -67,24 +67,23 @@ func (rn *RollingNumber) AddWithTime(time, i int64) {
 
 // Sum 对当前所有桶的计数求和
 func(rn *RollingNumber) Sum(now time.Time) (sum int64) {
-	for _, b := range rn.buckets {
-		if b != nil && b.time >= now.Unix() - timeWindow {
+	rn.buckets.forEach(func(b *bucket) {
+		if b != nil && b.isValid(now.Unix()) {
 			sum += b.sum()
 		}
-	}
-
+	})
 	return
 }
 
 // Max 返回当前所有桶中的最大计数
 func(rn *RollingNumber) Max(now time.Time) (max int64) {
-	for _, b := range rn.buckets {
-		if b != nil && b.time >= now.Unix() - timeWindow {
+	rn.buckets.forEach(func(b *bucket) {
+		if b != nil && b.isValid(now.Unix()) {
 			if val := b.sum(); val > max {
 				max = val
 			}
 		}
-	}
+	})
 
 	return
 }
