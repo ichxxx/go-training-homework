@@ -57,8 +57,10 @@ func BenchmarkRollingNumberAddConcurrent(b *testing.B) {
 		wg := sync.WaitGroup{}
 		wg.Add(concurrency)
 		for j := 0; j < concurrency; j++ {
-			number.Add(1)
-			wg.Done()
+			go func() {
+				number.Add(1)
+				wg.Done()
+			}()
 		}
 		wg.Wait()
 	}
